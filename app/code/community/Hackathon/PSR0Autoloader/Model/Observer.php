@@ -7,7 +7,7 @@ class Hackathon_PSR0Autoloader_Model_Observer extends Mage_Core_Model_Observer
     const CONFIG_PATH_COMPOSER_VENDOR_PATH = 'global/composer_vendor_path';
     const CONFIG_PATH_BASE_AUTOLOADER_DISABLE = 'global/base_autoloader_disable';
 
-    static $shouldAdd = true;
+    private static $hasRun = false;
 
     protected function getNamespacesToRegister()
     {
@@ -41,9 +41,10 @@ class Hackathon_PSR0Autoloader_Model_Observer extends Mage_Core_Model_Observer
 
     public function addAutoloader()
     {
-        if (!self::$shouldAdd) {
+        if (self::$hasRun) {
             return;
         }
+
         foreach ($this->getNamespacesToRegister() as $namespace) {
             if (is_dir(Mage::getBaseDir('lib') . DS . $namespace)) {
                 $args = array($namespace, Mage::getBaseDir('lib') . DS . $namespace);
@@ -51,12 +52,15 @@ class Hackathon_PSR0Autoloader_Model_Observer extends Mage_Core_Model_Observer
                 $autoloader->register();
             }
         }
+
         if ($composerVendorPath = $this->getComposerVendorPath()) {
             require_once $composerVendorPath . '/autoload.php';
         }
+
         if ($this->shouldDisableBaseAutoloader()) {
             spl_autoload_unregister(array(Varien_Autoload::instance(), 'autoload'));
         }
-        self::$shouldAdd = false;
+
+        self::$hasRun = true;
     }
 }
