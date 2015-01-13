@@ -82,11 +82,13 @@ class Hackathon_PSR0Autoloader_Model_Observer extends Mage_Core_Model_Observer
     {
         $composerVendorPath = $this->getComposerVendorPath();
         if (
-            !empty($composerVendorPath)
-            && is_string($composerVendorPath)
+            empty($composerVendorPath)
+            || !is_string($composerVendorPath)
         ) {
-            require_once $composerVendorPath . '/autoload.php';
+            return;
         }
+
+        require_once $composerVendorPath . '/autoload.php';
     }
 
     /**
@@ -96,11 +98,11 @@ class Hackathon_PSR0Autoloader_Model_Observer extends Mage_Core_Model_Observer
     private function getComposerVendorPath()
     {
         $node = $this->getNode(self::CONFIG_PATH_COMPOSER_VENDOR_PATH);
-        if (!isset($node)) {
+        if (empty($node)) {
             return null;
         }
 
-        $path = str_replace('{{root_dir}}', Mage::getBaseDir(), $node);
+        $path = str_replace('{{root_dir}}', Mage::getBaseDir(), (string) $node);
         return $path;
     }
 
@@ -110,8 +112,8 @@ class Hackathon_PSR0Autoloader_Model_Observer extends Mage_Core_Model_Observer
      */
     private function shouldDisableBaseAutoloader()
     {
-        $config = (string) $this->getNode(self::CONFIG_PATH_BASE_AUTOLOADER_DISABLE);
-        return (!empty($config) && !in_array($config, ["0", "false"], true));
+        $config = $this->getNode(self::CONFIG_PATH_BASE_AUTOLOADER_DISABLE);
+        return (!empty($config) && filter_var((string) $config, FILTER_VALIDATE_BOOLEAN));
     }
 
     /**
