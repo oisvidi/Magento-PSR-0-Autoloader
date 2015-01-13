@@ -98,7 +98,7 @@ class Hackathon_PSR0Autoloader_Model_Observer extends Mage_Core_Model_Observer
     private function getComposerVendorPath()
     {
         $node = $this->getNode(self::CONFIG_PATH_COMPOSER_VENDOR_PATH);
-        if (empty($node)) {
+        if (!is_object($node)) {
             return null;
         }
 
@@ -113,7 +113,7 @@ class Hackathon_PSR0Autoloader_Model_Observer extends Mage_Core_Model_Observer
     private function shouldDisableBaseAutoloader()
     {
         $config = $this->getNode(self::CONFIG_PATH_BASE_AUTOLOADER_DISABLE);
-        return (!empty($config) && filter_var((string) $config, FILTER_VALIDATE_BOOLEAN));
+        return (is_object($config) && filter_var((string) $config, FILTER_VALIDATE_BOOLEAN));
     }
 
     /**
