@@ -1,5 +1,8 @@
 <?php
 
+/**
+ * Class Hackathon_PSR0Autoloader_Model_Observer
+ */
 class Hackathon_PSR0Autoloader_Model_Observer extends Mage_Core_Model_Observer
 {
 
@@ -7,59 +10,137 @@ class Hackathon_PSR0Autoloader_Model_Observer extends Mage_Core_Model_Observer
     const CONFIG_PATH_COMPOSER_VENDOR_PATH = 'global/composer_vendor_path';
     const CONFIG_PATH_BASE_AUTOLOADER_DISABLE = 'global/base_autoloader_disable';
 
+    /**
+     * @var bool
+     */
     private static $hasRun = false;
 
-    protected function getNamespacesToRegister()
+    /**
+     * Get Magento node
+     * @param $nodeName
+     * @return object|null Node object if found in config, null if not
+     */
+    private function getNode($nodeName)
+    {
+        $config = Mage::getConfig();
+        if (!is_object($config)) {
+            return null;
+        }
+
+        $node = $config->getNode($nodeName);
+        if (!is_object($node)) {
+            return null;
+        }
+
+        return $node;
+    }
+
+    /**
+     * Register namespaces with autoloader if set in config
+     */
+    private function registerNamespaces()
+    {
+        $namespaceList = $this->getNamespacesToRegister();
+        if (empty($namespaceList) || !is_array($namespaceList)) {
+            return;
+        }
+
+        foreach ($namespaceList as $namespace) {
+            $namespaceDir = Mage::getBaseDir('lib') . DS . $namespace;
+            if (is_dir($namespaceDir)) {
+                $args = array($namespace, $namespaceDir);
+                $autoloader = Mage::getModel("psr0autoloader/splAutoloader", $args);
+                $autoloader->register();
+            }
+        }
+    }
+
+    /**
+     * Get namespaces to register in autoloader
+     * @return array with namespaces to load as values
+     */
+    private function getNamespacesToRegister()
     {
         $namespaces = array();
-        $node = Mage::getConfig()->getNode(self::CONFIG_PATH_PSR0NAMESPACES);
-        if ($node && is_array($node->asArray())) {
-            $namespaces = array_keys($node->asArray());
+        $node = $this->getNode(self::CONFIG_PATH_PSR0NAMESPACES);
+        if (!is_object($node)) {
+            return $namespaces;
         }
+
+        $nodeArray = $node->asArray();
+        if (is_array($nodeArray)) {
+            $namespaces = array_keys($nodeArray);
+        }
+
         return $namespaces;
     }
 
     /**
-     * return false, if no composer Vendor Path is set in local.xml
+     * Load composer autoloader if path is set in configuration
      */
-    protected function getComposerVendorPath()
+    private function loadComposer()
     {
-        $node = Mage::getConfig()->getNode(self::CONFIG_PATH_COMPOSER_VENDOR_PATH);
+        $composerVendorPath = $this->getComposerVendorPath();
+        if (
+            !empty($composerVendorPath)
+            && is_string($composerVendorPath)
+        ) {
+            require_once $composerVendorPath . '/autoload.php';
+        }
+    }
+
+    /**
+     * Get composer vendor path if set in configuration
+     * @return string|null string if path set in config, null if not
+     */
+    private function getComposerVendorPath()
+    {
+        $node = $this->getNode(self::CONFIG_PATH_COMPOSER_VENDOR_PATH);
+        if (!isset($node)) {
+            return null;
+        }
+
         $path = str_replace('{{root_dir}}', Mage::getBaseDir(), $node);
         return $path;
     }
 
-    protected function shouldDisableBaseAutoloader()
+    /**
+     * Check if config is set to disable Magento autoloader
+     * @return bool true if it should be disabled, false if not
+     */
+    private function shouldDisableBaseAutoloader()
     {
-        $config = Mage::getConfig()->getNode(self::CONFIG_PATH_BASE_AUTOLOADER_DISABLE);
-        if ($config && $config != "0" && $config != "false") {
-            return true;
-        } else {
-            return false;
+        $config = (string) $this->getNode(self::CONFIG_PATH_BASE_AUTOLOADER_DISABLE);
+        return (!empty($config) && !in_array($config, ["0", "false"], true));
+    }
+
+    /**
+     * Disable Magento default autoloader if set in config files
+     */
+    private function disableMagentoAutoloader()
+    {
+        if ($this->shouldDisableBaseAutoloader()) {
+            spl_autoload_unregister(array(Varien_Autoload::instance(), 'autoload'));
         }
     }
 
+    /**
+     * Register namespaces for autoload, load composer autoload and disable Magento default
+     * autoloader according to config files.
+     *
+     * This method can only be run once.
+     */
     public function addAutoloader()
     {
         if (self::$hasRun) {
             return;
         }
 
-        foreach ($this->getNamespacesToRegister() as $namespace) {
-            if (is_dir(Mage::getBaseDir('lib') . DS . $namespace)) {
-                $args = array($namespace, Mage::getBaseDir('lib') . DS . $namespace);
-                $autoloader = Mage::getModel("psr0autoloader/splAutoloader", $args);
-                $autoloader->register();
-            }
-        }
+        $this->registerNamespaces();
 
-        if ($composerVendorPath = $this->getComposerVendorPath()) {
-            require_once $composerVendorPath . '/autoload.php';
-        }
+        $this->loadComposer();
 
-        if ($this->shouldDisableBaseAutoloader()) {
-            spl_autoload_unregister(array(Varien_Autoload::instance(), 'autoload'));
-        }
+        $this->disableMagentoAutoloader();
 
         self::$hasRun = true;
     }
